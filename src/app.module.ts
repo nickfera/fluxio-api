@@ -5,6 +5,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { dbSourceOptions } from "./config/typeorm";
 import { UserModule } from "./user/user.module";
 import { LoggerModule } from "nestjs-pino";
+import { AuthModule } from "./auth/auth.module";
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { LoggerModule } from "nestjs-pino";
           : undefined,
     }),
     UserModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],

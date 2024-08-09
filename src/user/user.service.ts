@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -13,6 +14,8 @@ import {
   TUpdateUserSchema,
 } from "./schema/updateUser.schema";
 import { BadRequestValidationException } from "../common/error/badRequestValidation.exception";
+
+type TFindOneUserByFieldOption = "id" | "email" | "phoneNumber";
 
 @Injectable()
 export class UserService {
@@ -62,8 +65,31 @@ export class UserService {
     );
   }
 
-  async findOneById(id: number): Promise<UserEntity> {
-    const user = await this.userRepository.findOne({ id });
+  async findOneBy(
+    field: TFindOneUserByFieldOption,
+    idOrEmailOrPhoneNumber: number | string,
+  ): Promise<UserEntity> {
+    const where: FindOptionsWhere<UserEntity> = {};
+
+    if (field === "id" && typeof idOrEmailOrPhoneNumber === "number") {
+      where.id = idOrEmailOrPhoneNumber;
+    } else if (
+      field === "email" &&
+      typeof idOrEmailOrPhoneNumber === "string"
+    ) {
+      where.email = idOrEmailOrPhoneNumber;
+    } else if (
+      field === "phoneNumber" &&
+      typeof idOrEmailOrPhoneNumber === "string"
+    ) {
+      where.phoneNumber = idOrEmailOrPhoneNumber;
+    } else {
+      throw new BadRequestException(
+        "Could not find user: invalid field or value",
+      );
+    }
+
+    const user = await this.userRepository.findOne(where);
 
     if (!user) {
       throw new NotFoundException("User not found.");

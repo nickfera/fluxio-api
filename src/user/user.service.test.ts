@@ -1,22 +1,22 @@
 import { beforeEach, describe, it, mock } from "node:test";
 import { strict as assert } from "node:assert";
 import { Test } from "@nestjs/testing";
-import { faker } from "@faker-js/faker";
-import { UserService } from "./user.service";
-import { ScryptService } from "src/scrypt/scrypt.service";
-import { UserRepository } from "./user.repository";
-import { TCreateUserPublicSchema } from "./schema/createUser.schema";
-import { UserEntity } from "./user.entity";
-import {
-  TUpdateAuthenticatedUserSchema,
-  TUpdateUserSchema,
-} from "./schema/updateUser.schema";
 import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { BadRequestValidationException } from "src/common/error/badRequestValidation.exception";
+import { faker } from "@faker-js/faker";
+import { UserService } from "./user.service";
+import { UserRepository } from "./user.repository";
+import { TCreateUserPublicSchema } from "./schema/createUser.schema";
+import { UserEntity } from "./user.entity";
+import { ScryptService } from "../scrypt/scrypt.service";
+import {
+  TUpdateAuthenticatedUserSchema,
+  TUpdateUserSchema,
+} from "./schema/updateUser.schema";
+import { BadRequestValidationException } from "../common/error/badRequestValidation.exception";
 
 const dummyUser: UserEntity = {
   id: faker.number.int(),
@@ -157,22 +157,62 @@ describe("UserService", undefined, () => {
     });
   });
 
-  describe("Find user by ID", undefined, () => {
-    it("Should find user", async () => {
+  describe("Find one user", undefined, () => {
+    it("Should find user by id", async () => {
       const id = dummyUser.id;
 
-      const user = await userService.findOneById(id);
+      const user = await userService.findOneBy("id", id);
 
       assert.strictEqual(typeof user, "object", "user should be defined");
     });
 
-    it("Should not find user", async () => {
+    it("Should not find user by id", async () => {
       const id = faker.number.int();
 
       mockUserRepository.findOne.mock.mockImplementationOnce(async () => null);
 
       await assert.rejects(
-        async () => await userService.findOneById(id),
+        async () => await userService.findOneBy("id", id),
+        NotFoundException,
+        "should throw NotFoundException",
+      );
+    });
+
+    it("Should find user by e-mail", async () => {
+      const email = faker.internet.email();
+
+      const user = await userService.findOneBy("email", email);
+
+      assert.strictEqual(typeof user, "object", "user should be defined");
+    });
+
+    it("Should not find user by e-mail", async () => {
+      const email = faker.internet.email();
+
+      mockUserRepository.findOne.mock.mockImplementationOnce(async () => null);
+
+      await assert.rejects(
+        async () => await userService.findOneBy("email", email),
+        NotFoundException,
+        "should throw NotFoundException",
+      );
+    });
+
+    it("Should find user by phone number", async () => {
+      const phoneNumber = faker.phone.number();
+
+      const user = await userService.findOneBy("phoneNumber", phoneNumber);
+
+      assert.strictEqual(typeof user, "object", "user should be defined");
+    });
+
+    it("Should not find user by phone number", async () => {
+      const phoneNumber = faker.phone.number();
+
+      mockUserRepository.findOne.mock.mockImplementationOnce(async () => null);
+
+      await assert.rejects(
+        async () => await userService.findOneBy("phoneNumber", phoneNumber),
         NotFoundException,
         "should throw NotFoundException",
       );

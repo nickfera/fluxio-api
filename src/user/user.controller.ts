@@ -1,11 +1,16 @@
+import { Request } from "express";
 import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
   Post,
+  Req,
+  UseGuards,
   UsePipes,
 } from "@nestjs/common";
 import { UserService } from "./user.service";
@@ -18,10 +23,28 @@ import {
   TUpdateUserSchema,
   updateUserSchema,
 } from "./schema/updateUser.schema";
+import { TValidatedUser } from "../auth/auth.service";
+import { AuthGuard } from "../auth/guard/auth.guard";
+import { LocalAuthGuard } from "../auth/guard/localAuth.guard";
 
 @Controller("user")
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @UseGuards(LocalAuthGuard)
+  @Post("/login")
+  @HttpCode(HttpStatus.OK)
+  async login(@Req() req: Request) {
+    return req.user;
+  }
+
+  @Get("/logout")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(@Req() req: Request) {
+    req.session.destroy(() => {});
+
+    return;
+  }
 
   @Post()
   @UsePipes(new ZodValidationPipe(createUserPublicSchema, "body"))
@@ -29,9 +52,10 @@ export class UserController {
     return await this.userService.create(createUser);
   }
 
-  @Get(":id")
-  async findOneById(@Param("id", ParseIntPipe) id: number) {
-    return await this.userService.findOneById(id);
+  @UseGuards(AuthGuard)
+  @Get("")
+  async getAuthenticated(@Req() req: Request & { user: TValidatedUser }) {
+    return req.user;
   }
 
   @Patch(":id")
