@@ -7,6 +7,7 @@ import { UserEntity } from "../user/user.entity";
 import { UserService } from "../user/user.service";
 import { ScryptService } from "../scrypt/scrypt.service";
 import { UserRepository } from "../user/user.repository";
+import { UserVerificationEntity } from "../userVerification/userVerification.entity";
 
 const dummyUser: UserEntity = {
   id: faker.number.int(),
@@ -67,8 +68,82 @@ describe("AuthService", undefined, () => {
 
     const validatedUser = await authService.validateUser(email, password);
 
-    assert.notStrictEqual(validatedUser, { ...user, password: undefined });
+    assert.notStrictEqual(validatedUser, null, "'user' should be defined");
+    assert.strictEqual(
+      validatedUser?.id,
+      user.id,
+      "'user.id' should be defined",
+    );
+    assert.strictEqual(
+      validatedUser?.firstName,
+      user.firstName,
+      "'user.firstName' should be defined",
+    );
+    assert.strictEqual(
+      validatedUser?.role,
+      user.role,
+      "'user.role' should be defined",
+    );
   });
+
+  it(
+    "should validate user by e-mail with pending confirmations",
+    undefined,
+    async () => {
+      const email = faker.internet.email();
+      const password = faker.internet.password();
+      const hashedPassword = await scryptService.hash(password);
+      const userVerifications: UserVerificationEntity[] = [
+        {
+          id: faker.number.int(),
+          createdAt: faker.date.recent().toISOString(),
+          expiresAt: faker.date.soon().toISOString(),
+          userId: dummyUser.id,
+          verificationType: "email",
+          tokenHash: faker.string.hexadecimal({ length: 64 }),
+          isVerified: false,
+        },
+      ];
+
+      const user = {
+        ...dummyUser,
+        email,
+        password: hashedPassword,
+        userVerifications,
+      };
+
+      mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
+
+      const validatedUser = await authService.validateUser(email, password);
+
+      assert.notStrictEqual(validatedUser, null, "'user' should be defined");
+      assert.strictEqual(
+        validatedUser?.id,
+        user.id,
+        "'user.id' should be defined",
+      );
+      assert.strictEqual(
+        validatedUser?.firstName,
+        user.firstName,
+        "'user.firstName' should be defined",
+      );
+      assert.strictEqual(
+        validatedUser?.role,
+        user.role,
+        "'user.role' should be defined",
+      );
+      assert.notStrictEqual(
+        validatedUser.pendingUserVerifications,
+        undefined,
+        "'user.pendingUserVerifications' should be defined",
+      );
+      assert.deepStrictEqual(
+        validatedUser.pendingUserVerifications,
+        ["email"],
+        "'user.pendingUserVerifications' should have an element 'email'",
+      );
+    },
+  );
 
   it(
     "should not validate user by e-mail, user doesn't exist",
@@ -113,8 +188,85 @@ describe("AuthService", undefined, () => {
 
     const validatedUser = await authService.validateUser(phoneNumber, password);
 
-    assert.notStrictEqual(validatedUser, { ...user, password: undefined });
+    assert.notStrictEqual(validatedUser, null, "'user' should be defined");
+    assert.strictEqual(
+      validatedUser?.id,
+      user.id,
+      "'user.id' should be defined",
+    );
+    assert.strictEqual(
+      validatedUser?.firstName,
+      user.firstName,
+      "'user.firstName' should be defined",
+    );
+    assert.strictEqual(
+      validatedUser?.role,
+      user.role,
+      "'user.role' should be defined",
+    );
   });
+
+  it(
+    "should validate user by phone number with pending confirmations",
+    undefined,
+    async () => {
+      const phoneNumber = faker.phone.number();
+      const password = faker.internet.password();
+      const hashedPassword = await scryptService.hash(password);
+      const userVerifications: UserVerificationEntity[] = [
+        {
+          id: faker.number.int(),
+          createdAt: faker.date.recent().toISOString(),
+          expiresAt: faker.date.soon().toISOString(),
+          userId: dummyUser.id,
+          verificationType: "phone",
+          tokenHash: faker.string.hexadecimal({ length: 64 }),
+          isVerified: false,
+        },
+      ];
+
+      const user: UserEntity = {
+        ...dummyUser,
+        phoneNumber,
+        password: hashedPassword,
+        userVerifications,
+      };
+
+      mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
+
+      const validatedUser = await authService.validateUser(
+        phoneNumber,
+        password,
+      );
+
+      assert.notStrictEqual(validatedUser, null, "'user' should be defined");
+      assert.strictEqual(
+        validatedUser?.id,
+        user.id,
+        "'user.id' should be defined",
+      );
+      assert.strictEqual(
+        validatedUser?.firstName,
+        user.firstName,
+        "'user.firstName' should be defined",
+      );
+      assert.strictEqual(
+        validatedUser?.role,
+        user.role,
+        "'user.role' should be defined",
+      );
+      assert.notStrictEqual(
+        validatedUser.pendingUserVerifications,
+        undefined,
+        "'user.pendingUserVerifications' should be defined",
+      );
+      assert.deepStrictEqual(
+        validatedUser.pendingUserVerifications,
+        ["phone"],
+        "'user.pendingUserVerifications' should have an element 'phone'",
+      );
+    },
+  );
 
   it(
     "should not validate user by phone number, user doesn't exist",

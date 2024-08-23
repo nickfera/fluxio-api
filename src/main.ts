@@ -8,6 +8,10 @@ import * as session from "express-session";
 import * as passport from "passport";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filter/allExceptions.filter";
+import { Settings as LuxonSettings } from "luxon";
+
+LuxonSettings.defaultLocale = "pt-BR";
+LuxonSettings.defaultZone = "utc";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

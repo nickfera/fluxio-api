@@ -14,7 +14,7 @@ import {
   UsePipes,
 } from "@nestjs/common";
 import { UserService } from "./user.service";
-import { ZodValidationPipe } from "../common/pipe/zod-validation.pipe";
+import { ZodValidationPipe } from "../common/pipe/zodValidation.pipe";
 import {
   createUserPublicSchema,
   TCreateUserPublicSchema,
@@ -26,19 +26,21 @@ import {
 import { TValidatedUser } from "../auth/auth.service";
 import { AuthGuard } from "../auth/guard/auth.guard";
 import { LocalAuthGuard } from "../auth/guard/localAuth.guard";
+import { AuthUnverifiedGuard } from "src/auth/guard/authUnverified.guard";
 
 @Controller("user")
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @UseGuards(LocalAuthGuard)
   @Post("/login")
+  @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
   async login(@Req() req: Request) {
     return req.user;
   }
 
   @Get("/logout")
+  @UseGuards(AuthUnverifiedGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Req() req: Request) {
     req.session.destroy(() => {});
@@ -52,13 +54,14 @@ export class UserController {
     return await this.userService.create(createUser);
   }
 
-  @UseGuards(AuthGuard)
   @Get("")
+  @UseGuards(AuthUnverifiedGuard)
   async getAuthenticated(@Req() req: Request & { user: TValidatedUser }) {
     return req.user;
   }
 
   @Patch(":id")
+  @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(updateUserSchema, "body"))
   async update(
     @Param("id", ParseIntPipe) id: number,

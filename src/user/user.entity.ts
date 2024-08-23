@@ -1,9 +1,10 @@
+import { UserVerificationEntity } from "src/userVerification/userVerification.entity";
 import {
   Column,
   CreateDateColumn,
-  DeepPartial,
   DeleteDateColumn,
   Entity,
+  OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
 } from "typeorm";
@@ -13,10 +14,6 @@ export type TUserRole = (typeof UserRoles)[number];
 
 @Entity("user")
 export class UserEntity {
-  constructor(values?: DeepPartial<UserEntity>) {
-    values && Object.assign(this, values);
-  }
-
   @PrimaryColumn({ name: "id", type: "int", generated: "increment" })
   id: number;
 
@@ -28,6 +25,14 @@ export class UserEntity {
 
   @DeleteDateColumn({ name: "deleted_at", type: "datetime" })
   deletedAt?: string | null;
+
+  @Column({
+    name: "last_login_at",
+    type: "datetime",
+    nullable: true,
+    default: null,
+  })
+  lastLoginAt?: string | null;
 
   @Column({
     name: "first_name",
@@ -78,4 +83,10 @@ export class UserEntity {
     nullable: false,
   })
   role: TUserRole;
+
+  @OneToMany(
+    () => UserVerificationEntity,
+    (userVerification) => userVerification.user,
+  )
+  userVerifications?: UserVerificationEntity[];
 }

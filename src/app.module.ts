@@ -6,6 +6,7 @@ import { dbSourceOptions } from "./config/typeorm";
 import { UserModule } from "./user/user.module";
 import { LoggerModule } from "nestjs-pino";
 import { AuthModule } from "./auth/auth.module";
+import { UserVerificationModule } from "./userVerification/userVerification.module";
 
 @Module({
   imports: [
@@ -20,11 +21,15 @@ import { AuthModule } from "./auth/auth.module";
                   colorize: true,
                 },
               },
+              level: "debug",
             }
-          : undefined,
+          : {
+              level: "info",
+            },
     }),
     UserModule,
     AuthModule,
+    UserVerificationModule,
   ],
   controllers: [],
   providers: [],

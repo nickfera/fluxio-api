@@ -17,6 +17,7 @@ import {
   TUpdateUserSchema,
 } from "./schema/updateUser.schema";
 import { BadRequestValidationException } from "../common/error/badRequestValidation.exception";
+import { UserVerificationService } from "src/userVerification/userVerification.service";
 
 const dummyUser: UserEntity = {
   id: faker.number.int(),
@@ -37,6 +38,10 @@ const mockUserRepository = {
   save: mock.fn(async (entity: UserEntity): Promise<UserEntity> => entity),
 };
 
+const mockUserConfirmationService = {
+  create: mock.fn(async (): Promise<any> => {}),
+};
+
 describe("UserService", undefined, () => {
   let userService: UserService;
   let scryptService: ScryptService;
@@ -44,16 +49,23 @@ describe("UserService", undefined, () => {
   beforeEach(async () => {
     mockUserRepository.findOne.mock.resetCalls();
     mockUserRepository.save.mock.resetCalls();
+    mockUserConfirmationService.create.mock.resetCalls();
 
     const moduleRef = await Test.createTestingModule({
-      providers: [UserService, ScryptService],
-    })
-      .useMocker((token) => {
-        if (token === UserRepository) {
-          return mockUserRepository;
-        }
-      })
-      .compile();
+      imports: [],
+      providers: [
+        {
+          provide: UserRepository,
+          useValue: mockUserRepository,
+        },
+        UserService,
+        ScryptService,
+        {
+          provide: UserVerificationService,
+          useValue: mockUserConfirmationService,
+        },
+      ],
+    }).compile();
 
     userService = moduleRef.get<UserService>(UserService);
     scryptService = moduleRef.get<ScryptService>(ScryptService);
@@ -74,6 +86,11 @@ describe("UserService", undefined, () => {
       const user = await userService.create(createUser);
 
       assert.strictEqual(typeof user, "object", "user should be defined");
+      assert.strictEqual(
+        mockUserConfirmationService.create.mock.callCount(),
+        2,
+        "'UserVerificationService.create' should be called 2 times",
+      );
     });
 
     it("Should not create user, no e-mail or phone number informed", async () => {
@@ -256,6 +273,11 @@ describe("UserService", undefined, () => {
         updatedUser,
         expectedUpdatedUser,
         "user should have updated properties",
+      );
+      assert.strictEqual(
+        mockUserConfirmationService.create.mock.callCount(),
+        2,
+        "'UserVerificationService.create' should be called 2 times",
       );
     });
 

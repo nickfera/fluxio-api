@@ -25,15 +25,11 @@ export class ZodValidationPipe implements PipeTransform {
     } catch (error) {
       const errors = error?.errors;
 
-      if (errors && Array.isArray(errors)) {
-        const fields: string[] = [
-          ...new Set(
-            errors.map(
-              (error) =>
-                error.path && Array.isArray(error.path) && error.path.join("."),
-            ),
-          ),
-        ];
+      if (!!errors && Array.isArray(errors)) {
+        const fields: string[] = errors.map(
+          (error) =>
+            error.path && Array.isArray(error.path) && error.path.join("."),
+        );
 
         throw new BadRequestValidationException(fields);
       }

@@ -5,9 +5,10 @@ import { UserRepository } from "./user.repository";
 import { UserService } from "./user.service";
 import { ScryptService } from "../scrypt/scrypt.service";
 import { UserController } from "./user.controller";
+import { UserVerificationModule } from "src/userVerification/userVerification.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity])],
+  imports: [TypeOrmModule.forFeature([UserEntity]), UserVerificationModule],
   providers: [UserRepository, UserService, ScryptService],
   controllers: [UserController],
   exports: [UserService],
