@@ -9,6 +9,7 @@ import {
 } from "./userVerification.entity";
 import { UserVerificationRepository } from "./userVerification.repository";
 import { DeepPartial, FindOptionsWhere } from "typeorm";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 
 const dummyToken = "123456";
 const dummyTokenHash =
@@ -132,7 +133,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -192,7 +193,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -252,7 +253,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -262,7 +263,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -326,7 +327,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -336,7 +337,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -399,7 +400,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -409,7 +410,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -418,12 +419,13 @@ describe("UserVerificationService", undefined, () => {
     );
   });
 
-  it("Should not verify because no user id, e-mail or phone number was informed", async (context) => {
+  it("Should not verify because no user id, e-mail or phone number was informed", async () => {
     const token = dummyToken;
 
     await assert.rejects(
       async () => await userVerificationService.verify(token, {}),
-      "Should reject or throw exception",
+      BadRequestException,
+      "Should throw 'BadRequestException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
@@ -437,7 +439,7 @@ describe("UserVerificationService", undefined, () => {
     );
   });
 
-  it("Should not verify because both e-mail and phone number were informed", async (context) => {
+  it("Should not verify because both e-mail and phone number were informed", async () => {
     const token = dummyToken;
     const email = faker.internet.email();
     const phoneNumber = faker.phone.number();
@@ -445,7 +447,8 @@ describe("UserVerificationService", undefined, () => {
     await assert.rejects(
       async () =>
         await userVerificationService.verify(token, { email, phoneNumber }),
-      "Should reject or throw exception",
+      BadRequestException,
+      "Should throw 'BadRequestException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
@@ -485,12 +488,13 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.rejects(
       async () => await userVerificationService.verify(token, { userId }),
-      "Should reject or throw exception",
+      NotFoundException,
+      "Should throw 'NotFoundException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -527,12 +531,13 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.rejects(
       async () => await userVerificationService.verify(token, { email }),
-      "Should reject or throw exception",
+      NotFoundException,
+      "Should throw 'NotFoundException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -569,12 +574,13 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.rejects(
       async () => await userVerificationService.verify(token, { phoneNumber }),
-      "Should reject throw exception",
+      NotFoundException,
+      "Should throw 'NotFoundException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -619,12 +625,13 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.rejects(
       async () => await userVerificationService.verify(token, { userId }),
-      "Should reject or throw exception",
+      NotFoundException,
+      "Should throw 'NotFoundException'",
     );
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -698,7 +705,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -708,7 +715,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
@@ -777,7 +784,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.findOne.mock.callCount(),
       1,
-      "UserVerificationRepository 'findOne' should be called once",
+      "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
@@ -787,7 +794,7 @@ describe("UserVerificationService", undefined, () => {
     assert.strictEqual(
       mockUserVerificationRepository.save.mock.callCount(),
       1,
-      "UserVerificationRepository 'save' should be called once",
+      "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
       mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),

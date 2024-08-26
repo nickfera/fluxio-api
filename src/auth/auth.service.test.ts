@@ -2,22 +2,23 @@ import { beforeEach, describe, it, mock } from "node:test";
 import { strict as assert } from "node:assert";
 import { Test } from "@nestjs/testing";
 import { faker } from "@faker-js/faker";
-import { AuthService } from "./auth.service";
+import { AuthService, TValidatedUser } from "./auth.service";
 import { UserEntity } from "../user/user.entity";
 import { UserService } from "../user/user.service";
 import { ScryptService } from "../scrypt/scrypt.service";
 import { UserRepository } from "../user/user.repository";
-import { UserVerificationEntity } from "../userVerification/userVerification.entity";
+
+const dummyPassword = "12345678";
+const dummyPasswordHash =
+  "c8580c9544eb0291c2f8c43996ae1015:0bd3100e141296d97132c7de80f252a68a6661936da93fc6634e473d25134f2f96feb8c5d69de4b7b2ed126469c9031d65332fc8f6d89283401c2d7235ac093b";
 
 const dummyUser: UserEntity = {
   id: faker.number.int(),
-  createdAt: faker.date.past().toISOString(),
+  createdAt: new Date(Date.now()).toISOString(),
   updatedAt: null,
-  deletedAt: null,
   firstName: faker.person.firstName(),
   lastName: faker.person.lastName(),
-  password:
-    "4decffaa441b8889e4c61a67736c31e5:2d15367d55a3748e76f71a2825caff96010d3b87f3cbf2952c17ac442f5f67d030abe383eb99cabc98fd1120fb5e3ea10c006bd6d65f613b97c641e7625062c7",
+  password: dummyPasswordHash,
   email: faker.internet.email(),
   phoneNumber: faker.string.numeric(11),
   role: "owner",
@@ -31,58 +32,81 @@ const mockUserService = {
   findOneBy: mock.fn(async (): Promise<UserEntity | null> => dummyUser),
 };
 
+const mockScryptService = {
+  hash: mock.fn(async (): Promise<string> => dummyPasswordHash),
+  verify: mock.fn(async (): Promise<boolean> => true),
+};
+
 describe("AuthService", undefined, () => {
   let authService: AuthService;
-  let userService: UserService;
-  let scryptService: ScryptService;
 
   beforeEach(async () => {
-    mockUserService.findOneBy.mock.resetCalls();
     mockUserRepository.findOne.mock.resetCalls();
+    mockUserService.findOneBy.mock.resetCalls();
+    mockScryptService.hash.mock.resetCalls();
+    mockScryptService.verify.mock.resetCalls();
 
     const moduleRef = await Test.createTestingModule({
-      providers: [AuthService, ScryptService],
-    })
-      .useMocker((token) => {
-        if (token === UserService) {
-          return mockUserService;
-        } else if (token === UserRepository) {
-          return mockUserRepository;
-        }
-      })
-      .compile();
+      providers: [
+        AuthService,
+        {
+          provide: UserRepository,
+          useValue: mockUserRepository,
+        },
+        {
+          provide: UserService,
+          useValue: mockUserService,
+        },
+        {
+          provide: ScryptService,
+          useValue: mockScryptService,
+        },
+      ],
+    }).compile();
 
     authService = moduleRef.get<AuthService>(AuthService);
-    userService = moduleRef.get<UserService>(UserService);
-    scryptService = moduleRef.get<ScryptService>(ScryptService);
   });
 
-  it("should validate user by e-mail", undefined, async () => {
+  it("Should validate user by e-mail", undefined, async () => {
     const email = faker.internet.email();
-    const password = faker.internet.password();
-    const hashedPassword = await scryptService.hash(password);
+    const password = dummyPassword;
+    const hashedPassword = dummyPasswordHash;
 
     const user = { ...dummyUser, email, password: hashedPassword };
 
+    const expectedValidatedUser = {
+      id: user.id,
+      firstName: user.firstName,
+      role: user.role,
+      pendingUserVerifications: undefined,
+    };
+
+    const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+      "email",
+      email,
+      { userVerifications: true },
+    ];
+
     mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
+
+    mockScryptService.verify.mock.mockImplementationOnce(async () => true);
 
     const validatedUser = await authService.validateUser(email, password);
 
-    assert.notStrictEqual(validatedUser, null, "'user' should be defined");
-    assert.strictEqual(
-      validatedUser?.id,
-      user.id,
-      "'user.id' should be defined",
+    assert.deepStrictEqual(
+      validatedUser,
+      expectedValidatedUser,
+      "Validated user is different than expected",
     );
     assert.strictEqual(
-      validatedUser?.firstName,
-      user.firstName,
-      "'user.firstName' should be defined",
+      mockUserService.findOneBy.mock.callCount(),
+      1,
+      "UserService 'findOneBy' should be called 1 time",
     );
-    assert.strictEqual(
-      validatedUser?.role,
-      user.role,
-      "'user.role' should be defined",
+    assert.deepStrictEqual(
+      mockUserService.findOneBy.mock.calls[0].arguments,
+      expectedFindOneByArgs,
+      "UserService 'findOneBy' called with unexpected arguments",
     );
   });
 
@@ -91,56 +115,59 @@ describe("AuthService", undefined, () => {
     undefined,
     async () => {
       const email = faker.internet.email();
-      const password = faker.internet.password();
-      const hashedPassword = await scryptService.hash(password);
-      const userVerifications: UserVerificationEntity[] = [
-        {
-          id: faker.number.int(),
-          createdAt: faker.date.recent().toISOString(),
-          expiresAt: faker.date.soon().toISOString(),
-          userId: dummyUser.id,
-          verificationType: "email",
-          tokenHash: faker.string.hexadecimal({ length: 64 }),
-          isVerified: false,
-        },
-      ];
+      const password = dummyPassword;
+      const hashedPassword = dummyPasswordHash;
 
-      const user = {
+      const user: UserEntity = {
         ...dummyUser,
         email,
         password: hashedPassword,
-        userVerifications,
+        userVerifications: [
+          {
+            id: faker.number.int(),
+            createdAt: new Date(Date.now()).toISOString(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            userId: dummyUser.id,
+            verificationType: "email",
+            tokenHash: faker.string.hexadecimal({ length: 64 }),
+            isVerified: false,
+          },
+        ],
       };
+
+      const expectedValidatedUser: TValidatedUser = {
+        id: user.id,
+        firstName: user.firstName,
+        role: user.role,
+        pendingUserVerifications: ["email"],
+      };
+
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "email",
+        email,
+        { userVerifications: true },
+      ];
 
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
 
+      mockScryptService.verify.mock.mockImplementationOnce(async () => true);
+
       const validatedUser = await authService.validateUser(email, password);
 
-      assert.notStrictEqual(validatedUser, null, "'user' should be defined");
-      assert.strictEqual(
-        validatedUser?.id,
-        user.id,
-        "'user.id' should be defined",
+      assert.deepStrictEqual(
+        validatedUser,
+        expectedValidatedUser,
+        "Validated user is different than expected",
       );
       assert.strictEqual(
-        validatedUser?.firstName,
-        user.firstName,
-        "'user.firstName' should be defined",
-      );
-      assert.strictEqual(
-        validatedUser?.role,
-        user.role,
-        "'user.role' should be defined",
-      );
-      assert.notStrictEqual(
-        validatedUser.pendingUserVerifications,
-        undefined,
-        "'user.pendingUserVerifications' should be defined",
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
       );
       assert.deepStrictEqual(
-        validatedUser.pendingUserVerifications,
-        ["email"],
-        "'user.pendingUserVerifications' should have an element 'email'",
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
       );
     },
   );
@@ -152,11 +179,27 @@ describe("AuthService", undefined, () => {
       const email = faker.internet.email();
       const password = faker.internet.password();
 
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "email",
+        email,
+        { userVerifications: true },
+      ];
+
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => null);
 
       const validatedUser = await authService.validateUser(email, password);
 
-      assert.strictEqual(validatedUser, null);
+      assert.strictEqual(validatedUser, null, "Validted user should be null");
+      assert.strictEqual(
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
+      );
     },
   );
 
@@ -167,42 +210,74 @@ describe("AuthService", undefined, () => {
       const email = faker.internet.email();
       const password = faker.internet.password();
 
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "email",
+        email,
+        { userVerifications: true },
+      ];
+
       mockUserService.findOneBy.mock.mockImplementationOnce(
         async () => dummyUser,
       );
 
+      mockScryptService.verify.mock.mockImplementationOnce(async () => false);
+
       const validatedUser = await authService.validateUser(email, password);
 
-      assert.strictEqual(validatedUser, null);
+      assert.strictEqual(validatedUser, null, "Validated user should be null");
+      assert.strictEqual(
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
+      );
     },
   );
 
   it("should validate user by phone number", undefined, async () => {
-    const phoneNumber = faker.phone.number();
-    const password = faker.internet.password();
-    const hashedPassword = await scryptService.hash(password);
+    const phoneNumber = faker.string.numeric(11);
+    const password = dummyPassword;
+    const hashedPassword = dummyPasswordHash;
 
     const user = { ...dummyUser, phoneNumber, password: hashedPassword };
 
+    const expectedValidatedUser = {
+      id: user.id,
+      firstName: user.firstName,
+      role: user.role,
+      pendingUserVerifications: undefined,
+    };
+
+    const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+      "phoneNumber",
+      phoneNumber,
+      { userVerifications: true },
+    ];
+
     mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
+
+    mockScryptService.verify.mock.mockImplementationOnce(async () => true);
 
     const validatedUser = await authService.validateUser(phoneNumber, password);
 
-    assert.notStrictEqual(validatedUser, null, "'user' should be defined");
-    assert.strictEqual(
-      validatedUser?.id,
-      user.id,
-      "'user.id' should be defined",
+    assert.deepStrictEqual(
+      validatedUser,
+      expectedValidatedUser,
+      "Validated user different than expected",
     );
     assert.strictEqual(
-      validatedUser?.firstName,
-      user.firstName,
-      "'user.firstName' should be defined",
+      mockUserService.findOneBy.mock.callCount(),
+      1,
+      "UserService 'findOneBy' should be called 1 time",
     );
-    assert.strictEqual(
-      validatedUser?.role,
-      user.role,
-      "'user.role' should be defined",
+    assert.deepStrictEqual(
+      mockUserService.findOneBy.mock.calls[0].arguments,
+      expectedFindOneByArgs,
+      "UserService 'findOneBy' called with unexpected arguments",
     );
   });
 
@@ -210,60 +285,63 @@ describe("AuthService", undefined, () => {
     "should validate user by phone number with pending confirmations",
     undefined,
     async () => {
-      const phoneNumber = faker.phone.number();
-      const password = faker.internet.password();
-      const hashedPassword = await scryptService.hash(password);
-      const userVerifications: UserVerificationEntity[] = [
-        {
-          id: faker.number.int(),
-          createdAt: faker.date.recent().toISOString(),
-          expiresAt: faker.date.soon().toISOString(),
-          userId: dummyUser.id,
-          verificationType: "phone",
-          tokenHash: faker.string.hexadecimal({ length: 64 }),
-          isVerified: false,
-        },
-      ];
+      const phoneNumber = faker.string.numeric(11);
+      const password = dummyPassword;
+      const hashedPassword = dummyPasswordHash;
 
       const user: UserEntity = {
         ...dummyUser,
         phoneNumber,
         password: hashedPassword,
-        userVerifications,
+        userVerifications: [
+          {
+            id: faker.number.int(),
+            createdAt: faker.date.recent().toISOString(),
+            expiresAt: faker.date.soon().toISOString(),
+            userId: dummyUser.id,
+            verificationType: "phone",
+            tokenHash: faker.string.hexadecimal({ length: 64 }),
+            isVerified: false,
+          },
+        ],
       };
 
+      const expectedValidatedUser: TValidatedUser = {
+        id: user.id,
+        firstName: user.firstName,
+        role: user.role,
+        pendingUserVerifications: ["phone"],
+      };
+
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "phoneNumber",
+        phoneNumber,
+        { userVerifications: true },
+      ];
+
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
+
+      mockScryptService.verify.mock.mockImplementationOnce(async () => true);
 
       const validatedUser = await authService.validateUser(
         phoneNumber,
         password,
       );
 
-      assert.notStrictEqual(validatedUser, null, "'user' should be defined");
-      assert.strictEqual(
-        validatedUser?.id,
-        user.id,
-        "'user.id' should be defined",
+      assert.deepStrictEqual(
+        validatedUser,
+        expectedValidatedUser,
+        "Validated user is different than expected",
       );
       assert.strictEqual(
-        validatedUser?.firstName,
-        user.firstName,
-        "'user.firstName' should be defined",
-      );
-      assert.strictEqual(
-        validatedUser?.role,
-        user.role,
-        "'user.role' should be defined",
-      );
-      assert.notStrictEqual(
-        validatedUser.pendingUserVerifications,
-        undefined,
-        "'user.pendingUserVerifications' should be defined",
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
       );
       assert.deepStrictEqual(
-        validatedUser.pendingUserVerifications,
-        ["phone"],
-        "'user.pendingUserVerifications' should have an element 'phone'",
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
       );
     },
   );
@@ -272,8 +350,14 @@ describe("AuthService", undefined, () => {
     "should not validate user by phone number, user doesn't exist",
     undefined,
     async () => {
-      const phoneNumber = faker.phone.number();
-      const password = faker.internet.password();
+      const phoneNumber = faker.string.numeric(11);
+      const password = dummyPassword;
+
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "phoneNumber",
+        phoneNumber,
+        { userVerifications: true },
+      ];
 
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => null);
 
@@ -282,7 +366,17 @@ describe("AuthService", undefined, () => {
         password,
       );
 
-      assert.strictEqual(validatedUser, null);
+      assert.strictEqual(validatedUser, null, "Validated user should be null");
+      assert.strictEqual(
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
+      );
     },
   );
 
@@ -290,19 +384,37 @@ describe("AuthService", undefined, () => {
     "should not validate user by phone number, incorrect password",
     undefined,
     async () => {
-      const phoneNumber = faker.phone.number();
+      const phoneNumber = faker.string.numeric(11);
       const password = faker.internet.password();
+
+      const expectedFindOneByArgs: Parameters<UserService["findOneBy"]> = [
+        "phoneNumber",
+        phoneNumber,
+        { userVerifications: true },
+      ];
 
       mockUserService.findOneBy.mock.mockImplementationOnce(
         async () => dummyUser,
       );
+
+      mockScryptService.verify.mock.mockImplementationOnce(async () => false);
 
       const validatedUser = await authService.validateUser(
         phoneNumber,
         password,
       );
 
-      assert.strictEqual(validatedUser, null);
+      assert.strictEqual(validatedUser, null, "Validated user should be null");
+      assert.strictEqual(
+        mockUserService.findOneBy.mock.callCount(),
+        1,
+        "UserService 'findOneBy' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.findOneBy.mock.calls[0].arguments,
+        expectedFindOneByArgs,
+        "UserService 'findOneBy' called with unexpected arguments",
+      );
     },
   );
 });

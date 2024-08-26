@@ -2,13 +2,9 @@ import { Request } from "express";
 import {
   Body,
   Controller,
-  Get,
   HttpCode,
   HttpStatus,
-  Param,
-  ParseIntPipe,
   Patch,
-  Post,
   Put,
   Req,
   UseGuards,
