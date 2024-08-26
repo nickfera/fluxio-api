@@ -30,6 +30,7 @@ const mockUserRepository = {
 
 const mockUserService = {
   findOneBy: mock.fn(async (): Promise<UserEntity | null> => dummyUser),
+  update: mock.fn(async (): Promise<UserEntity> => dummyUser),
 };
 
 const mockScryptService = {
@@ -43,6 +44,7 @@ describe("AuthService", undefined, () => {
   beforeEach(async () => {
     mockUserRepository.findOne.mock.resetCalls();
     mockUserService.findOneBy.mock.resetCalls();
+    mockUserService.update.mock.resetCalls();
     mockScryptService.hash.mock.resetCalls();
     mockScryptService.verify.mock.resetCalls();
 
@@ -67,7 +69,7 @@ describe("AuthService", undefined, () => {
     authService = moduleRef.get<AuthService>(AuthService);
   });
 
-  it("Should validate user by e-mail", undefined, async () => {
+  it("Should validate user by e-mail", undefined, async (context) => {
     const email = faker.internet.email();
     const password = dummyPassword;
     const hashedPassword = dummyPasswordHash;
@@ -86,6 +88,13 @@ describe("AuthService", undefined, () => {
       email,
       { userVerifications: true },
     ];
+
+    const expectedUpdateArgs: Parameters<UserService["update"]> = [
+      user.id,
+      { lastLoginAt: new Date(0).toISOString() },
+    ];
+
+    context.mock.timers.enable({ apis: ["Date"], now: 0 });
 
     mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
 
@@ -108,12 +117,22 @@ describe("AuthService", undefined, () => {
       expectedFindOneByArgs,
       "UserService 'findOneBy' called with unexpected arguments",
     );
+    assert.strictEqual(
+      mockUserService.update.mock.callCount(),
+      1,
+      "UserService 'update' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserService.update.mock.calls[0].arguments,
+      expectedUpdateArgs,
+      "UserService 'update' called with unexpected arguments",
+    );
   });
 
   it(
     "should validate user by e-mail with pending confirmations",
     undefined,
-    async () => {
+    async (context) => {
       const email = faker.internet.email();
       const password = dummyPassword;
       const hashedPassword = dummyPasswordHash;
@@ -148,6 +167,13 @@ describe("AuthService", undefined, () => {
         { userVerifications: true },
       ];
 
+      const expectedUpdateArgs: Parameters<UserService["update"]> = [
+        user.id,
+        { lastLoginAt: new Date(0).toISOString() },
+      ];
+
+      context.mock.timers.enable({ apis: ["Date"], now: 0 });
+
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
 
       mockScryptService.verify.mock.mockImplementationOnce(async () => true);
@@ -168,6 +194,16 @@ describe("AuthService", undefined, () => {
         mockUserService.findOneBy.mock.calls[0].arguments,
         expectedFindOneByArgs,
         "UserService 'findOneBy' called with unexpected arguments",
+      );
+      assert.strictEqual(
+        mockUserService.update.mock.callCount(),
+        1,
+        "UserService 'update' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.update.mock.calls[0].arguments,
+        expectedUpdateArgs,
+        "UserService 'update' called with unexpected arguments",
       );
     },
   );
@@ -238,7 +274,7 @@ describe("AuthService", undefined, () => {
     },
   );
 
-  it("should validate user by phone number", undefined, async () => {
+  it("should validate user by phone number", undefined, async (context) => {
     const phoneNumber = faker.string.numeric(11);
     const password = dummyPassword;
     const hashedPassword = dummyPasswordHash;
@@ -257,6 +293,13 @@ describe("AuthService", undefined, () => {
       phoneNumber,
       { userVerifications: true },
     ];
+
+    const expectedUpdateArgs: Parameters<UserService["update"]> = [
+      user.id,
+      { lastLoginAt: new Date(0).toISOString() },
+    ];
+
+    context.mock.timers.enable({ apis: ["Date"], now: 0 });
 
     mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
 
@@ -279,12 +322,22 @@ describe("AuthService", undefined, () => {
       expectedFindOneByArgs,
       "UserService 'findOneBy' called with unexpected arguments",
     );
+    assert.strictEqual(
+      mockUserService.update.mock.callCount(),
+      1,
+      "UserService 'update' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserService.update.mock.calls[0].arguments,
+      expectedUpdateArgs,
+      "UserService 'update' called with unexpected arguments",
+    );
   });
 
   it(
     "should validate user by phone number with pending confirmations",
     undefined,
-    async () => {
+    async (context) => {
       const phoneNumber = faker.string.numeric(11);
       const password = dummyPassword;
       const hashedPassword = dummyPasswordHash;
@@ -319,6 +372,13 @@ describe("AuthService", undefined, () => {
         { userVerifications: true },
       ];
 
+      const expectedUpdateArgs: Parameters<UserService["update"]> = [
+        user.id,
+        { lastLoginAt: new Date(0).toISOString() },
+      ];
+
+      context.mock.timers.enable({ apis: ["Date"], now: 0 });
+
       mockUserService.findOneBy.mock.mockImplementationOnce(async () => user);
 
       mockScryptService.verify.mock.mockImplementationOnce(async () => true);
@@ -342,6 +402,16 @@ describe("AuthService", undefined, () => {
         mockUserService.findOneBy.mock.calls[0].arguments,
         expectedFindOneByArgs,
         "UserService 'findOneBy' called with unexpected arguments",
+      );
+      assert.strictEqual(
+        mockUserService.update.mock.callCount(),
+        1,
+        "UserService 'update' should be called 1 time",
+      );
+      assert.deepStrictEqual(
+        mockUserService.update.mock.calls[0].arguments,
+        expectedUpdateArgs,
+        "UserService 'update' called with unexpected arguments",
       );
     },
   );

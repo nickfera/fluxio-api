@@ -31,16 +31,17 @@ export class AuthService {
       return null;
     }
 
+    await this.userService.update(user.id, {
+      lastLoginAt: new Date(Date.now()).toISOString(),
+    });
+
     let pendingUserVerifications: TUserVerificationType[] | undefined =
       undefined;
 
     if (
       user.userVerifications &&
       user.userVerifications.length > 0 &&
-      user.userVerifications.every(
-        (verification) => !verification.isVerified,
-      ) &&
-      !user.lastLoginAt
+      user.userVerifications.every((verification) => !verification.isVerified)
     ) {
       pendingUserVerifications = user.userVerifications.map(
         ({ verificationType }) => verificationType,
