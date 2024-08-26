@@ -77,11 +77,15 @@ export class UserService {
     this.logger.debug(`New user '${user.firstName}' with id ${user.id} saved.`);
 
     if (user.email) {
-      await this.userConfirmationService.create(user.id, "email");
+      await this.userConfirmationService.create(user.id, "email", user.email);
     }
 
     if (user.phoneNumber) {
-      await this.userConfirmationService.create(user.id, "phone");
+      await this.userConfirmationService.create(
+        user.id,
+        "phone",
+        user.phoneNumber,
+      );
     }
 
     return user;
@@ -178,14 +182,18 @@ export class UserService {
     });
 
     if (updatedUser.email && updatedUser.email !== user.email) {
-      await this.userConfirmationService.create(id, "email");
+      await this.userConfirmationService.create(id, "email", updatedUser.email);
     }
 
     if (
       updatedUser.phoneNumber &&
       updatedUser.phoneNumber !== user.phoneNumber
     ) {
-      await this.userConfirmationService.create(id, "phone");
+      await this.userConfirmationService.create(
+        id,
+        "phone",
+        updatedUser.phoneNumber,
+      );
     }
 
     return updatedUser;

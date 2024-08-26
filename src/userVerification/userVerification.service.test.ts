@@ -1,6 +1,7 @@
 import { beforeEach, describe, it, mock } from "node:test";
 import { strict as assert } from "node:assert";
 import { Test } from "@nestjs/testing";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { faker } from "@faker-js/faker";
 import { UserVerificationService } from "./userVerification.service";
 import {
@@ -8,18 +9,31 @@ import {
   UserVerificationEntity,
 } from "./userVerification.entity";
 import { UserVerificationRepository } from "./userVerification.repository";
-import { DeepPartial, FindOptionsWhere } from "typeorm";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { MessageService } from "src/message/message.service";
+import { UserEntity } from "src/user/user.entity";
 
 const dummyToken = "123456";
 const dummyTokenHash =
   "1327353f0203b13f1f3b819dabb16a612c791aae694b7a3943a682def10282db";
 
+const dummyUser: UserEntity = {
+  id: faker.number.int(),
+  createdAt: new Date(Date.now()).toISOString(),
+  updatedAt: null,
+  firstName: faker.person.firstName(),
+  lastName: faker.person.lastName(),
+  password:
+    "c8580c9544eb0291c2f8c43996ae1015:0bd3100e141296d97132c7de80f252a68a6661936da93fc6634e473d25134f2f96feb8c5d69de4b7b2ed126469c9031d65332fc8f6d89283401c2d7235ac093b",
+  email: faker.internet.email(),
+  phoneNumber: faker.string.numeric(11),
+  role: "owner",
+};
+
 const dummyUserVerification: UserVerificationEntity = {
   id: faker.number.int(),
   createdAt: faker.date.past().toISOString(),
   updatedAt: null,
-  userId: faker.number.int(),
+  userId: dummyUser.id,
   verificationType: "email",
   tokenHash: dummyTokenHash,
   expiresAt: faker.date.recent().toISOString(),
@@ -35,12 +49,19 @@ const mockUserVerificationRepository = {
   ),
 };
 
+const mockMessageService = {
+  sendEmail: mock.fn((): void => {}),
+  sendSMS: mock.fn((): void => {}),
+};
+
 describe("UserVerificationService", undefined, () => {
   let userVerificationService: UserVerificationService;
 
   beforeEach(async () => {
     mockUserVerificationRepository.findOne.mock.resetCalls();
     mockUserVerificationRepository.save.mock.resetCalls();
+    mockMessageService.sendEmail.mock.resetCalls();
+    mockMessageService.sendSMS.mock.resetCalls();
 
     const moduleRef = await Test.createTestingModule({
       imports: [],
@@ -49,6 +70,10 @@ describe("UserVerificationService", undefined, () => {
         {
           provide: UserVerificationRepository,
           useValue: mockUserVerificationRepository,
+        },
+        {
+          provide: MessageService,
+          useValue: mockMessageService,
         },
       ],
     }).compile();
@@ -85,6 +110,7 @@ describe("UserVerificationService", undefined, () => {
   it("Should create user email verification and token", async (context) => {
     const userId = faker.number.int();
     const verificationType: TUserVerificationType = "email";
+    const email = faker.internet.email();
 
     const expectedUserVerificiation: UserVerificationEntity = {
       id: faker.number.int(),
@@ -97,13 +123,15 @@ describe("UserVerificationService", undefined, () => {
       isVerified: false,
     };
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      userId,
-      verificationType,
-      tokenHash: dummyTokenHash,
-      expiresAt: expectedUserVerificiation.expiresAt,
-      isVerified: false,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        userId,
+        verificationType,
+        tokenHash: dummyTokenHash,
+        expiresAt: expectedUserVerificiation.expiresAt,
+        isVerified: false,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -127,7 +155,7 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.doesNotReject(
       async () =>
-        await userVerificationService.create(userId, verificationType),
+        await userVerificationService.create(userId, verificationType, email),
       "Should not reject or throw exception",
     );
     assert.strictEqual(
@@ -136,15 +164,21 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendEmail.mock.callCount(),
+      1,
+      "MessageService 'sendEmail' should be called 1 time",
     );
   });
 
   it("Should create user phone number verification and token", async (context) => {
     const userId = faker.number.int();
     const verificationType: TUserVerificationType = "phone";
+    const phoneNumber = faker.string.numeric(11);
 
     const expectedUserVerificiation: UserVerificationEntity = {
       id: faker.number.int(),
@@ -157,13 +191,15 @@ describe("UserVerificationService", undefined, () => {
       isVerified: false,
     };
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      userId,
-      verificationType,
-      tokenHash: dummyTokenHash,
-      expiresAt: expectedUserVerificiation.expiresAt,
-      isVerified: false,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        userId,
+        verificationType,
+        tokenHash: dummyTokenHash,
+        expiresAt: expectedUserVerificiation.expiresAt,
+        isVerified: false,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -187,7 +223,11 @@ describe("UserVerificationService", undefined, () => {
 
     await assert.doesNotReject(
       async () =>
-        await userVerificationService.create(userId, verificationType),
+        await userVerificationService.create(
+          userId,
+          verificationType,
+          phoneNumber,
+        ),
       "Should not reject or throw exception",
     );
     assert.strictEqual(
@@ -196,102 +236,45 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendSMS.mock.callCount(),
+      1,
+      "MessageService 'sendSMS' should be called 1 time",
     );
   });
 
-  it("Should verify token with user id", async (context) => {
+  it("Should verify e-mail with token and user id", async (context) => {
     const token = dummyToken;
     const userId = dummyUserVerification.userId;
-    const isVerified = false;
-    const expiresAt = new Date(100000).toISOString();
-
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      userId,
-      isVerified: false,
-    };
-
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      ...dummyUserVerification,
-      expiresAt,
-      tokenHash: null,
-      isVerified: true,
-    };
-
-    context.mock.method(
-      userVerificationService,
-      "generateTokenHash",
-      () => dummyTokenHash,
-      { times: 1 },
-    );
-
-    context.mock.timers.enable({ apis: ["Date"], now: 0 });
-
-    mockUserVerificationRepository.findOne.mock.mockImplementationOnce(
-      async (): Promise<UserVerificationEntity> => ({
-        ...dummyUserVerification,
-        isVerified,
-        expiresAt,
-      }),
-    );
-
-    mockUserVerificationRepository.save.mock.mockImplementationOnce(
-      async (): Promise<UserVerificationEntity> => ({
-        ...dummyUserVerification,
-        expiresAt,
-        isVerified: true,
-      }),
-    );
-
-    await assert.doesNotReject(
-      async () => await userVerificationService.verify(token, { userId }),
-      "Should not or reject throw exception",
-    );
-    assert.strictEqual(
-      mockUserVerificationRepository.findOne.mock.callCount(),
-      1,
-      "UserVerificationRepository 'findOne' should be called 1 time",
-    );
-    assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
-      "UserVerificationRepository 'findOne' called with unexpected arguments",
-    );
-    assert.strictEqual(
-      mockUserVerificationRepository.save.mock.callCount(),
-      1,
-      "UserVerificationRepository 'save' should be called 1 time",
-    );
-    assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
-      "UserVerificationRepository 'save' called with unexpected arguments",
-    );
-  });
-
-  it("Should verify token with e-mail", async (context) => {
-    const token = dummyToken;
     const email = faker.internet.email();
     const verificationType: TUserVerificationType = "email";
     const isVerified = false;
     const expiresAt = new Date(100000).toISOString();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      isVerified: false,
-      user: { email },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        userId,
+        isVerified: false,
+      },
+      { user: true },
+    ];
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      ...dummyUserVerification,
-      verificationType,
-      tokenHash: null,
-      expiresAt,
-      isVerified: true,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        verificationType,
+        expiresAt,
+        tokenHash: null,
+        isVerified: true,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -308,6 +291,182 @@ describe("UserVerificationService", undefined, () => {
         verificationType,
         isVerified,
         expiresAt,
+        user: { ...dummyUser, email },
+      }),
+    );
+
+    mockUserVerificationRepository.save.mock.mockImplementationOnce(
+      async (): Promise<UserVerificationEntity> => ({
+        ...dummyUserVerification,
+        verificationType,
+        expiresAt,
+        isVerified: true,
+      }),
+    );
+
+    await assert.doesNotReject(
+      async () => await userVerificationService.verify(token, { userId }),
+      "Should not or reject throw exception",
+    );
+    assert.strictEqual(
+      mockUserVerificationRepository.findOne.mock.callCount(),
+      1,
+      "UserVerificationRepository 'findOne' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
+      "UserVerificationRepository 'findOne' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockUserVerificationRepository.save.mock.callCount(),
+      1,
+      "UserVerificationRepository 'save' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
+      "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendEmail.mock.callCount(),
+      1,
+      "MessageService 'sendEmail' should be called 1 time",
+    );
+  });
+
+  it("Should verify phone number with token and user id", async (context) => {
+    const token = dummyToken;
+    const userId = dummyUserVerification.userId;
+    const phoneNumber = faker.string.numeric(11);
+    const verificationType: TUserVerificationType = "phone";
+    const isVerified = false;
+    const expiresAt = new Date(100000).toISOString();
+
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        userId,
+        isVerified: false,
+      },
+      { user: true },
+    ];
+
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        verificationType,
+        expiresAt,
+        tokenHash: null,
+        isVerified: true,
+      },
+    ];
+
+    context.mock.method(
+      userVerificationService,
+      "generateTokenHash",
+      () => dummyTokenHash,
+      { times: 1 },
+    );
+
+    context.mock.timers.enable({ apis: ["Date"], now: 0 });
+
+    mockUserVerificationRepository.findOne.mock.mockImplementationOnce(
+      async (): Promise<UserVerificationEntity> => ({
+        ...dummyUserVerification,
+        verificationType,
+        isVerified,
+        expiresAt,
+        user: { ...dummyUser, phoneNumber },
+      }),
+    );
+
+    mockUserVerificationRepository.save.mock.mockImplementationOnce(
+      async (): Promise<UserVerificationEntity> => ({
+        ...dummyUserVerification,
+        verificationType,
+        expiresAt,
+        isVerified: true,
+      }),
+    );
+
+    await assert.doesNotReject(
+      async () => await userVerificationService.verify(token, { userId }),
+      "Should not or reject throw exception",
+    );
+    assert.strictEqual(
+      mockUserVerificationRepository.findOne.mock.callCount(),
+      1,
+      "UserVerificationRepository 'findOne' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
+      "UserVerificationRepository 'findOne' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockUserVerificationRepository.save.mock.callCount(),
+      1,
+      "UserVerificationRepository 'save' should be called 1 time",
+    );
+    assert.deepStrictEqual(
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
+      "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendSMS.mock.callCount(),
+      1,
+      "MessageService 'sendSMS' should be called 1 time",
+    );
+  });
+
+  it("Should verify token with e-mail", async (context) => {
+    const token = dummyToken;
+    const email = faker.internet.email();
+    const verificationType: TUserVerificationType = "email";
+    const isVerified = false;
+    const expiresAt = new Date(100000).toISOString();
+
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        isVerified: false,
+        user: { email },
+      },
+      { user: true },
+    ];
+
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        verificationType,
+        tokenHash: null,
+        expiresAt,
+        isVerified: true,
+      },
+    ];
+
+    context.mock.method(
+      userVerificationService,
+      "generateTokenHash",
+      () => dummyTokenHash,
+      { times: 1 },
+    );
+
+    context.mock.timers.enable({ apis: ["Date"], now: 0 });
+
+    mockUserVerificationRepository.findOne.mock.mockImplementationOnce(
+      async (): Promise<UserVerificationEntity> => ({
+        ...dummyUserVerification,
+        verificationType,
+        isVerified,
+        expiresAt,
+        user: { ...dummyUser, email },
       }),
     );
 
@@ -330,8 +489,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -340,9 +499,14 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendEmail.mock.callCount(),
+      1,
+      "MessageService 'sendEmail' should be called 1 time",
     );
   });
 
@@ -353,19 +517,26 @@ describe("UserVerificationService", undefined, () => {
     const isVerified = false;
     const expiresAt = new Date(100000).toISOString();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      isVerified: false,
-      user: { phoneNumber },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        isVerified: false,
+        user: { phoneNumber },
+      },
+      { user: true },
+    ];
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      ...dummyUserVerification,
-      verificationType,
-      tokenHash: null,
-      expiresAt,
-      isVerified: true,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        verificationType,
+        tokenHash: null,
+        expiresAt,
+        isVerified: true,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -382,6 +553,7 @@ describe("UserVerificationService", undefined, () => {
         verificationType,
         isVerified,
         expiresAt,
+        user: { ...dummyUser, phoneNumber },
       }),
     );
 
@@ -403,8 +575,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -413,9 +585,14 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
+    );
+    assert.strictEqual(
+      mockMessageService.sendSMS.mock.callCount(),
+      1,
+      "MessageService 'sendSMS' should be called 1 time",
     );
   });
 
@@ -469,11 +646,16 @@ describe("UserVerificationService", undefined, () => {
     const tokenHash =
       "481f6cc0511143ccdd7e2d1b1b94faf0a700a8b49cd13922a70b5ae28acaa8c5";
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash,
-      isVerified: false,
-      userId,
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash,
+        isVerified: false,
+        userId,
+      },
+      { user: true },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -497,8 +679,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -512,11 +694,16 @@ describe("UserVerificationService", undefined, () => {
     const token = dummyToken;
     const email = faker.internet.email();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      isVerified: false,
-      user: { email },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        isVerified: false,
+        user: { email },
+      },
+      { user: true },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -540,8 +727,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -555,11 +742,16 @@ describe("UserVerificationService", undefined, () => {
     const token = dummyToken;
     const phoneNumber = faker.phone.number();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      isVerified: false,
-      user: { phoneNumber },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        isVerified: false,
+        user: { phoneNumber },
+      },
+      { user: true },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -583,8 +775,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -600,11 +792,16 @@ describe("UserVerificationService", undefined, () => {
     const isVerified = false;
     const expiresAt = new Date(0).toISOString();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      tokenHash: dummyTokenHash,
-      isVerified: false,
-      userId,
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        tokenHash: dummyTokenHash,
+        isVerified: false,
+        userId,
+      },
+      { user: true },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -634,8 +831,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -651,18 +848,24 @@ describe("UserVerificationService", undefined, () => {
     const isVerified = false;
     const expiresAt = new Date(30 * 60 * 1000).toISOString();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      isVerified: false,
-      user: { email },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        isVerified: false,
+        user: { email },
+      },
+    ];
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      ...dummyUserVerification,
-      tokenHash: dummyTokenHash,
-      verificationType,
-      isVerified,
-      expiresAt,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        tokenHash: dummyTokenHash,
+        verificationType,
+        isVerified,
+        expiresAt,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -708,8 +911,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -718,8 +921,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
     );
   });
@@ -730,18 +933,24 @@ describe("UserVerificationService", undefined, () => {
     const isVerified = false;
     const expiresAt = new Date(30 * 60 * 1000).toISOString();
 
-    const expectedFindOneArg: FindOptionsWhere<UserVerificationEntity> = {
-      isVerified: false,
-      user: { phoneNumber },
-    };
+    const expectedFindOneArgs: Parameters<
+      UserVerificationRepository["findOne"]
+    > = [
+      {
+        isVerified: false,
+        user: { phoneNumber },
+      },
+    ];
 
-    const expectedSaveArg: DeepPartial<UserVerificationEntity> = {
-      ...dummyUserVerification,
-      tokenHash: dummyTokenHash,
-      verificationType,
-      isVerified,
-      expiresAt,
-    };
+    const expectedSaveArgs: Parameters<UserVerificationRepository["save"]> = [
+      {
+        ...dummyUserVerification,
+        tokenHash: dummyTokenHash,
+        verificationType,
+        isVerified,
+        expiresAt,
+      },
+    ];
 
     context.mock.method(
       userVerificationService,
@@ -787,8 +996,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'findOne' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.findOne.mock.calls[0].arguments.at(0),
-      expectedFindOneArg,
+      mockUserVerificationRepository.findOne.mock.calls[0].arguments,
+      expectedFindOneArgs,
       "UserVerificationRepository 'findOne' called with unexpected arguments",
     );
     assert.strictEqual(
@@ -797,8 +1006,8 @@ describe("UserVerificationService", undefined, () => {
       "UserVerificationRepository 'save' should be called 1 time",
     );
     assert.deepStrictEqual(
-      mockUserVerificationRepository.save.mock.calls[0].arguments.at(0),
-      expectedSaveArg,
+      mockUserVerificationRepository.save.mock.calls[0].arguments,
+      expectedSaveArgs,
       "UserVerificationRepository 'save' called with unexpected arguments",
     );
   });

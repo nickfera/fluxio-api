@@ -42,16 +42,31 @@ export class UserVerificationController {
     @Body() { token }: TVerifyTokenSchema,
     @Req() req: Request,
   ) {
-    return await this.userVerificationService.verify(token, {
+    await this.userVerificationService.verify(token, {
       userId: req.user?.id,
     });
+
+    if (req.isAuthenticated() && req.user.pendingUserVerifications) {
+      delete req.user.pendingUserVerifications;
+    }
+
+    return;
   }
 
   @Patch("/email")
   @UsePipes(new ZodValidationPipe(verifyEmailTokenSchema, "body"))
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Body() { token, email }: TVerifyEmailTokenSchema) {
-    return await this.userVerificationService.verify(token, { email });
+  async verifyEmail(
+    @Body() { token, email }: TVerifyEmailTokenSchema,
+    @Req() req: Request,
+  ) {
+    await this.userVerificationService.verify(token, { email });
+
+    if (req.isAuthenticated() && req.user.pendingUserVerifications) {
+      delete req.user.pendingUserVerifications;
+    }
+
+    return;
   }
 
   @Patch("/phone-number")
@@ -59,8 +74,15 @@ export class UserVerificationController {
   @HttpCode(HttpStatus.OK)
   async verifyPhoneNumber(
     @Body() { token, phoneNumber }: TVerifyPhoneNumberTokenSchema,
+    @Req() req: Request,
   ) {
-    return await this.userVerificationService.verify(token, { phoneNumber });
+    await this.userVerificationService.verify(token, { phoneNumber });
+
+    if (req.isAuthenticated() && req.user.pendingUserVerifications) {
+      delete req.user.pendingUserVerifications;
+    }
+
+    return;
   }
 
   @Put("/email")

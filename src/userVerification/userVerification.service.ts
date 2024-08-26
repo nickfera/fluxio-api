@@ -11,6 +11,8 @@ import {
   UserVerificationEntity,
 } from "./userVerification.entity";
 import { UserVerificationRepository } from "./userVerification.repository";
+import { MessageService } from "src/message/message.service";
+import { UserEntity } from "src/user/user.entity";
 
 const verificationSecret = process.env.VERIFICATION_SECRET || "0123456789";
 
@@ -20,11 +22,13 @@ export class UserVerificationService {
 
   constructor(
     private readonly userVerificationRepository: UserVerificationRepository,
+    private readonly messageService: MessageService,
   ) {}
 
   async create(
     userId: number,
     verificationType: TUserVerificationType,
+    emailOrPhoneNumber: string,
   ): Promise<void> {
     this.logger.debug(
       `Creating verification token for user ${userId}, type '${verificationType}'.`,
@@ -32,21 +36,30 @@ export class UserVerificationService {
 
     const token = this.generateToken();
 
-    this.logger.debug(`Random token generated: '${token}'.`);
-
     const tokenHash = this.generateTokenHash(token);
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
     await this.userVerificationRepository.save({
       userId,
       verificationType,
       tokenHash,
-      expiresAt,
+      expiresAt: expiresAt.toISOString(),
       isVerified: false,
     });
 
-    this.logger.debug(`User verification saved; expires at ${expiresAt}.`);
+    if (verificationType === "email") {
+      this.messageService.sendEmail({
+        subject: "Fluxio - Verify your e-mail address",
+        recipient: emailOrPhoneNumber,
+        message: `To verify your e-mail address, inform this token: ${token}. It will expire in 30 minutes (${expiresAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}).`,
+      });
+    } else if (verificationType === "phone") {
+      this.messageService.sendSMS({
+        recipient: emailOrPhoneNumber,
+        message: `Verification token: ${token}. It will expire in 30 minutes (${expiresAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}).`,
+      });
+    }
   }
 
   async verify(
@@ -84,24 +97,41 @@ export class UserVerificationService {
       findOneOptions.user = { phoneNumber: options.phoneNumber };
     }
 
-    const userVerification =
-      await this.userVerificationRepository.findOne(findOneOptions);
+    const userVerification = (await this.userVerificationRepository.findOne(
+      findOneOptions,
+      { user: true },
+    )) as (UserVerificationEntity & { user: UserEntity }) | null;
 
     if (!userVerification) {
       throw new NotFoundException("Incorrect token.");
     }
 
+    const { user, ...verification } = userVerification;
+
     const nowMillis = new Date(Date.now()).valueOf();
-    const expiresAtMillis = new Date(userVerification.expiresAt).valueOf();
+    const expiresAtMillis = new Date(verification.expiresAt).valueOf();
 
     if (nowMillis > expiresAtMillis) {
       throw new NotFoundException("Token has expired.");
     }
 
-    userVerification.tokenHash = null;
-    userVerification.isVerified = true;
+    verification.tokenHash = null;
+    verification.isVerified = true;
 
-    await this.userVerificationRepository.save(userVerification);
+    await this.userVerificationRepository.save(verification);
+
+    if (verification.verificationType === "email" && user.email) {
+      this.messageService.sendEmail({
+        subject: "Fluxio - Your e-mail has been verified",
+        recipient: user.email,
+        message: `Your e-mail has been verified successfully`,
+      });
+    } else if (verification.verificationType === "phone" && user.phoneNumber) {
+      this.messageService.sendSMS({
+        recipient: user.phoneNumber,
+        message: `Your phone number has been verified successfully`,
+      });
+    }
   }
 
   async regenerate(options: {
@@ -141,18 +171,27 @@ export class UserVerificationService {
 
     const token = this.generateToken();
 
-    this.logger.debug(`Random token generated: '${token}'.`);
-
     const tokenHash = this.generateTokenHash(token);
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
     userVerification.tokenHash = tokenHash;
-    userVerification.expiresAt = expiresAt;
+    userVerification.expiresAt = expiresAt.toISOString();
 
     await this.userVerificationRepository.save(userVerification);
 
-    this.logger.debug(`User verification updated; expires at ${expiresAt}.`);
+    if (options.email) {
+      this.messageService.sendEmail({
+        subject: "Fluxio - Verify your e-mail address",
+        recipient: options.email,
+        message: `To verify your e-mail address, inform this token: ${token}. It will expire in 30 minutes (${expiresAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}).`,
+      });
+    } else if (options.phoneNumber) {
+      this.messageService.sendSMS({
+        recipient: options.phoneNumber,
+        message: `Verification token: ${token}. It will expire in 30 minutes (${expiresAt.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}).`,
+      });
+    }
   }
 
   generateToken(): string {

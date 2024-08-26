@@ -2,11 +2,17 @@ import "dotenv/config";
 
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { LoggerModule } from "nestjs-pino";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { dbSourceOptions } from "./config/typeorm";
 import { UserModule } from "./user/user.module";
-import { LoggerModule } from "nestjs-pino";
 import { AuthModule } from "./auth/auth.module";
 import { UserVerificationModule } from "./userVerification/userVerification.module";
+import { MessageModule } from "./message/message.module";
+import {
+  development_pinoHttpOptions,
+  production_pinoHttpOptions,
+} from "./config/pino";
 
 @Module({
   imports: [
@@ -14,22 +20,19 @@ import { UserVerificationModule } from "./userVerification/userVerification.modu
     LoggerModule.forRoot({
       pinoHttp:
         process.env.NODE_ENV === "development"
-          ? {
-              transport: {
-                target: "pino-pretty",
-                options: {
-                  colorize: true,
-                },
-              },
-              level: "debug",
-            }
-          : {
-              level: "info",
-            },
+          ? development_pinoHttpOptions
+          : production_pinoHttpOptions,
     }),
     UserModule,
     AuthModule,
     UserVerificationModule,
+    EventEmitterModule.forRoot({
+      delimiter: ".",
+      maxListeners: 1,
+      verboseMemoryLeak: true,
+      ignoreErrors: false,
+    }),
+    MessageModule,
   ],
   controllers: [],
   providers: [],

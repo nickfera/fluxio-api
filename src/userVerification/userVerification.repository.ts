@@ -1,6 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DeepPartial, FindOptionsWhere, Repository } from "typeorm";
+import {
+  DeepPartial,
+  FindOptionsRelations,
+  FindOptionsWhere,
+  Repository,
+} from "typeorm";
 import { UserVerificationEntity } from "./userVerification.entity";
 
 @Injectable()
@@ -20,7 +25,8 @@ export class UserVerificationRepository {
     where:
       | FindOptionsWhere<UserVerificationEntity>
       | FindOptionsWhere<UserVerificationEntity>[],
+    relations?: FindOptionsRelations<UserVerificationEntity>,
   ): Promise<UserVerificationEntity | null> {
-    return await this.repository.findOne({ where });
+    return await this.repository.findOne({ where, relations });
   }
 }

@@ -4,31 +4,16 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger,
 } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
 import { BadRequestValidationException } from "../error/badRequestValidation.exception";
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  private readonly logger = new Logger(AllExceptionsFilter.name);
-
   constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   catch(exception: any, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
-
-    const message =
-      exception instanceof Error || exception instanceof HttpException
-        ? exception.message
-        : "Unknown Error";
-
-    const stack =
-      exception instanceof Error || exception instanceof HttpException
-        ? exception.stack
-        : exception;
-
-    this.logger.error(message, stack);
 
     const ctx = host.switchToHttp();
 
