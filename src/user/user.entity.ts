@@ -1,3 +1,4 @@
+import { AreaEntity } from "src/area/area.entity";
 import { UserVerificationEntity } from "src/userVerification/userVerification.entity";
 import {
   Column,
@@ -89,4 +90,7 @@ export class UserEntity {
     (userVerification) => userVerification.user,
   )
   userVerifications?: UserVerificationEntity[];
+
+  @OneToMany(() => AreaEntity, (area) => area.user)
+  areas?: AreaEntity[];
 }

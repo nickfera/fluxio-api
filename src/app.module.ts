@@ -13,6 +13,7 @@ import {
   development_pinoHttpOptions,
   production_pinoHttpOptions,
 } from "./config/pino";
+import { AreaModule } from "./area/area.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import {
       ignoreErrors: false,
     }),
     MessageModule,
+    AreaModule,
   ],
   controllers: [],
   providers: [],

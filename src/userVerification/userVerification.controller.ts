@@ -27,6 +27,7 @@ import {
   TRegenerateEmailTokenSchema,
   TRegeneratePhoneNumberTokenSchema,
 } from "./schema/regenerateToken.schema";
+import { TUser, User } from "src/common/decorators";
 
 @Controller("user-verification")
 export class UserVerificationController {
@@ -39,11 +40,12 @@ export class UserVerificationController {
   @UsePipes(new ZodValidationPipe(verifyTokenSchema, "body"))
   @HttpCode(HttpStatus.OK)
   async verifyToken(
-    @Body() { token }: TVerifyTokenSchema,
     @Req() req: Request,
+    @User() user: TUser,
+    @Body() { token }: TVerifyTokenSchema,
   ) {
     await this.userVerificationService.verify(token, {
-      userId: req.user?.id,
+      userId: user.id,
     });
 
     if (req.isAuthenticated() && req.user.pendingUserVerifications) {
@@ -57,8 +59,8 @@ export class UserVerificationController {
   @UsePipes(new ZodValidationPipe(verifyEmailTokenSchema, "body"))
   @HttpCode(HttpStatus.OK)
   async verifyEmail(
-    @Body() { token, email }: TVerifyEmailTokenSchema,
     @Req() req: Request,
+    @Body() { token, email }: TVerifyEmailTokenSchema,
   ) {
     await this.userVerificationService.verify(token, { email });
 
@@ -73,8 +75,8 @@ export class UserVerificationController {
   @UsePipes(new ZodValidationPipe(verifyPhoneNumberTokenSchema, "body"))
   @HttpCode(HttpStatus.OK)
   async verifyPhoneNumber(
-    @Body() { token, phoneNumber }: TVerifyPhoneNumberTokenSchema,
     @Req() req: Request,
+    @Body() { token, phoneNumber }: TVerifyPhoneNumberTokenSchema,
   ) {
     await this.userVerificationService.verify(token, { phoneNumber });
 

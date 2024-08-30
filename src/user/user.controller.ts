@@ -5,8 +5,6 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Param,
-  ParseIntPipe,
   Patch,
   Post,
   Req,
@@ -14,19 +12,19 @@ import {
   UsePipes,
 } from "@nestjs/common";
 import { UserService } from "./user.service";
-import { ZodValidationPipe } from "../common/pipe/zodValidation.pipe";
+import { ZodValidationPipe } from "src/common/pipe/zodValidation.pipe";
+import { LocalAuthGuard } from "src/auth/guard/localAuth.guard";
+import { AuthUnverifiedGuard } from "src/auth/guard/authUnverified.guard";
+import { AuthGuard } from "src/auth/guard/auth.guard";
+import { TUser, User } from "src/common/decorators";
 import {
   createUserPublicSchema,
   TCreateUserPublicSchema,
 } from "./schema/createUser.schema";
 import {
-  TUpdateUserSchema,
-  updateUserSchema,
+  TUpdateAuthenticatedUserSchema,
+  updateAuthenticatedUserSchema,
 } from "./schema/updateUser.schema";
-import { TValidatedUser } from "../auth/auth.service";
-import { AuthGuard } from "../auth/guard/auth.guard";
-import { LocalAuthGuard } from "../auth/guard/localAuth.guard";
-import { AuthUnverifiedGuard } from "src/auth/guard/authUnverified.guard";
 
 @Controller("user")
 export class UserController {
@@ -35,8 +33,8 @@ export class UserController {
   @Post("/login")
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async login(@Req() req: Request) {
-    return req.user;
+  async login(@User() user: TUser) {
+    return user;
   }
 
   @Get("/logout")
@@ -56,17 +54,17 @@ export class UserController {
 
   @Get("")
   @UseGuards(AuthUnverifiedGuard)
-  async getAuthenticated(@Req() req: Request & { user: TValidatedUser }) {
-    return req.user;
+  async getAuthenticated(@User() user: TUser) {
+    return user;
   }
 
-  @Patch(":id")
+  @Patch()
   @UseGuards(AuthGuard)
-  @UsePipes(new ZodValidationPipe(updateUserSchema, "body"))
+  @UsePipes(new ZodValidationPipe(updateAuthenticatedUserSchema, "body"))
   async update(
-    @Param("id", ParseIntPipe) id: number,
-    @Body() updateUser: TUpdateUserSchema,
+    @User() user: TUser,
+    @Body() updateUser: TUpdateAuthenticatedUserSchema,
   ) {
-    return await this.userService.update(id, updateUser);
+    return await this.userService.update(user.id, updateUser);
   }
 }
