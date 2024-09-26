@@ -17,24 +17,22 @@ import { createAreaSchema, TCreateArea } from "./schema/createArea.schema";
 import { TUpdateArea, updateAreaSchema } from "./schema/updateArea.schema";
 
 @Controller("area")
+@UseGuards(AuthGuard)
 export class AreaController {
   constructor(private readonly areaService: AreaService) {}
 
   @Post("")
-  @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(createAreaSchema, "body"))
   async create(@User() user: TUser, @Body() createArea: TCreateArea) {
     return await this.areaService.create(createArea, user.id);
   }
 
   @Get(":id")
-  @UseGuards(AuthGuard)
   async findOne(@User() user: TUser, @Param("id") id: string) {
     return await this.areaService.findOne(+id, user.id);
   }
 
   @Patch(":id")
-  @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(updateAreaSchema, "body"))
   async update(
     @User() user: TUser,
@@ -45,7 +43,6 @@ export class AreaController {
   }
 
   @Delete(":id")
-  @UseGuards(AuthGuard)
   async softDelete(@User() user: TUser, @Param("id") id: string) {
     return await this.areaService.softDelete(+id, user.id);
   }

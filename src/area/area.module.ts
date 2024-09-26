@@ -9,6 +9,6 @@ import { AreaController } from "./area.controller";
   imports: [TypeOrmModule.forFeature([AreaEntity])],
   providers: [AreaRepository, AreaService],
   controllers: [AreaController],
-  exports: [],
+  exports: [AreaService],
 })
 export class AreaModule {}

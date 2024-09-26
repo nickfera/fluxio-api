@@ -1,5 +1,3 @@
-import { ObserverEntity } from "src/observer/observer.entity";
-import { UserEntity } from "src/user/user.entity";
 import {
   Column,
   CreateDateColumn,
@@ -7,13 +5,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
 } from "typeorm";
+import { AreaEntity } from "src/area/area.entity";
 
-@Entity("area")
-export class AreaEntity {
+@Entity("observer")
+export class ObserverEntity {
   @PrimaryColumn({ name: "id", type: "int", generated: "increment" })
   id: number;
 
@@ -44,16 +42,13 @@ export class AreaEntity {
   active: boolean;
 
   @Column({
-    name: "user_id",
+    name: "area_id",
     type: "int",
     nullable: false,
   })
-  userId: number;
+  areaId: number;
 
-  @ManyToOne(() => UserEntity, (user) => user.areas)
-  @JoinColumn({ name: "user_id" })
-  user?: UserEntity;
-
-  @OneToMany(() => ObserverEntity, (observer) => observer.area)
-  observers?: ObserverEntity[];
+  @ManyToOne(() => AreaEntity)
+  @JoinColumn({ name: "area_id" })
+  area?: AreaEntity;
 }
